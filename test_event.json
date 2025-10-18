@@ -1,0 +1,8 @@
+{
+  "name": "World",
+  "type": "test",
+  "data": {
+    "message": "This is a test event for the containerized Lambda function",
+    "timestamp": "2024-01-01T00:00:00Z"
+  }
+}
