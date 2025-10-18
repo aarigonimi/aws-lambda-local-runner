@@ -152,7 +152,7 @@ Update code later by pushing a new image tag, then running `aws lambda update-fu
   No, Docker-only is enough.
 
 - Why is the image ~1GB?  
-  The Lambda base image includes runtime components. Multi-stage builds won’t reduce the base image; keep dependencies minimal.
+  The Lambda base image includes runtime components. Multi-stage builds won't reduce the base image; keep dependencies minimal.
 
 - Can I use a different Python version?  
   Yes, change the tag in the `FROM` line, e.g., `python:3.12` if supported by Lambda.
