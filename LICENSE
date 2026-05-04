@@ -19,3 +19,212 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+I'm building a Dash (Plotly) app deployed on Databricks Apps, styled with Dash Bootstrap Components (dbc). The app connects to a Databricks Genie Space for natural language querying of policy data.
+
+I need you to build a full-page investigation dashboard UI for actuaries to diagnose why scoring model drivers are unscored. Here is the complete spec:
+
+---
+
+## LAYOUT
+
+Use dbc.Container(fluid=True) with a fixed-height viewport. The layout has 3 columns:
+- Left sidebar: 2 cols wide (filters)
+- Center panel: 7 cols wide (KPIs + reason cards + driver table)
+- Right panel: 3 cols wide (Genie chat)
+
+Use a top navbar built with dbc.Navbar containing:
+- Brand name "PolicyIQ" with a teal dot (●) prefix
+- Nav tabs: Overview | Driver investigation (active) | Portfolio | Mortality
+- Right-aligned status badge: green dot + "Genie · Databricks"
+
+---
+
+## LEFT SIDEBAR
+
+Wrap in a dbc.Card with no border-radius on the right side, full height, light background.
+
+Include these filter sections, each with a small uppercase label:
+
+1. Text search input (dbc.Input) — placeholder: "e.g. POL-00291, age_band…"
+
+2. Source table — dbc.Checklist as pills:
+   options: ["Policy table", "Client table", "Both / join issue"]
+   all checked by default
+
+3. Unscored reason category — dbc.Checklist as pills:
+   options: ["Missing value", "Out of range", "Mapping error", "Join failure", "Inactive policy", "Future effective"]
+   first 4 checked by default
+
+4. Driver / feature — dbc.Checklist as pills:
+   options: ["age_band", "smoker_status", "gender", "face_amount", "duration", "underwriting_class", "province", "product_code"]
+   first 3 checked by default
+
+5. Severity — dbc.Checklist as pills:
+   options: ["High", "Med", "Low"]
+   style each pill with its semantic color (High=red, Med=amber, Low=green)
+
+At the bottom: snapshot label showing "2024-Q4 · 1.2M policies" and "Last refresh: 2h ago"
+
+---
+
+## CENTER PANEL — TOP: KPI ROW
+
+4 dbc.Card metric cards in a dbc.Row, each showing:
+1. "Total drivers" → 24, subtitle "in scoring model"
+2. "Unscored drivers" → 7 (red), subtitle "29% of model"
+3. "Policies affected" → 41.3K, subtitle "4.9% of portfolio"
+4. "Est. score impact" → –8.2% (amber), subtitle "avg score degradation"
+
+---
+
+## CENTER PANEL — MIDDLE: REASON BREAKDOWN CARDS
+
+A 2x2 grid of dbc.Card components (dbc.Row with 2 dbc.Col each).
+Each card is clickable and updates a dcc.Store called "active-reason-store".
+The active card gets a colored left border accent (2px).
+
+Card 1 — Missing value
+- Source badge: "Policy + Client" (amber pill)
+- Count: 18,240
+- Subtitle: "drivers with null / blank fields"
+- A small plotly bar chart (go.Bar) showing weekly trend, purple bars
+- id: "card-missing"
+
+Card 2 — Out of range
+- Source badge: "Policy table" (purple pill)
+- Count: 10,482
+- Subtitle: "values outside model bounds"
+- Small bar chart, coral/red bars
+- id: "card-oor"
+
+Card 3 — Join failure
+- Source badge: "Policy + Client" (amber pill)
+- Count: 7,901
+- Subtitle: "client_id not matched to policy"
+- Small bar chart, teal bars
+- id: "card-join"
+
+Card 4 — Mapping error
+- Source badge: "Client table" (teal pill)
+- Count: 4,620
+- Subtitle: "unrecognised category codes"
+- Small bar chart, amber bars
+- id: "card-mapping"
+
+Each card has an n_clicks property. Wire a callback that:
+- Sets the active-reason-store value to the clicked reason name
+- Adds a CSS class "active-card" to the clicked card (left border accent)
+- Updates the Genie chat context banner with the selected reason
+
+---
+
+## CENTER PANEL — BOTTOM: DRIVER DETAIL TABLE
+
+Use dash_table.DataTable with id="driver-table".
+
+Columns:
+- Driver (string)
+- Source (string) — render as colored pill using style_data_conditional
+- Reason (string) — colored pill
+- Severity (string) — colored pill
+- Affected (integer, formatted with comma separator)
+- Coverage % (float, show as a progress bar using style_data_conditional background trick)
+
+Data (hardcode as default, will be replaced by Genie callback):
+[
+  {"driver": "smoker_status", "source": "Client", "reason": "Missing", "severity": "High", "affected": 12401, "coverage": 30},
+  {"driver": "age_band", "source": "Policy", "reason": "Out of range", "severity": "High", "affected": 9820, "coverage": 24},
+  {"driver": "client_id (join)", "source": "Both", "reason": "Join failure", "severity": "Med", "affected": 7901, "coverage": 19},
+  {"driver": "underwriting_class", "source": "Client", "reason": "Mapping error", "severity": "Med", "affected": 4620, "coverage": 11},
+  {"driver": "gender", "source": "Client", "reason": "Missing", "severity": "Low", "affected": 3210, "coverage": 8},
+  {"driver": "face_amount", "source": "Policy", "reason": "Out of range", "severity": "Med", "affected": 2840, "coverage": 7},
+  {"driver": "province", "source": "Policy", "reason": "Mapping error", "severity": "Low", "affected": 510, "coverage": 1}
+]
+
+Style rules via style_data_conditional:
+- Source "Client" → purple pill background #EEEDFE, text #3C3489
+- Source "Policy" → teal pill background #E1F5EE, text #085041
+- Source "Both" → amber pill background #FAEEDA, text #633806
+- Severity "High" → red text #A32D2D
+- Severity "Med" → amber text #854F0B
+- Severity "Low" → green text #3B6D11
+- Coverage column: use linear-gradient background trick to simulate a progress bar
+
+Sort by "affected" descending by default. Enable sort_action="native".
+
+Wire a callback: when active-reason-store changes OR sidebar filters change, filter the table rows accordingly.
+
+---
+
+## RIGHT PANEL — GENIE CHAT
+
+Build a chat interface in a full-height dbc.Card. Structure:
+
+1. Card header: "Investigate with Genie" title + "SQL · Genie" purple pill badge
+
+2. Context banner (dbc.Alert, id="context-banner", color="primary", light=True):
+   Shows "Active context: [reason] · [driver] · [N] records"
+   Updates via callback when active-reason-store changes
+
+3. Chat message area: a scrollable div (id="chat-messages") containing dbc.Card bubbles.
+   User messages: right-aligned, light gray background
+   AI messages: left-aligned, light teal background #E1F5EE, teal border
+
+4. Suggested prompts — 3 dbc.Button components (outline, small, full width):
+   - "Fix rate if we backfill smoker_status ↗"
+   - "Broker channels with most missing drivers ↗"
+   - "Score uplift if all drivers fixed ↗"
+   Clicking a suggested prompt populates the input and triggers send.
+
+5. Input row: dbc.Input (id="chat-input", placeholder="Dig deeper into any driver or cohort…") + dbc.Button("Send", id="send-btn")
+
+---
+
+## GENIE SPACE CALLBACK
+
+Create a callback with:
+- Input: send-btn n_clicks, chat-input value, active-reason-store data
+- State: chat-messages children (for conversation history)
+- Output: chat-messages children (append new bubbles), chat-input value (clear after send)
+
+Inside the callback, call the Databricks Genie Space API:
+- Use the existing DATABRICKS_HOST and GENIE_SPACE_ID environment variables
+- Endpoint: POST {DATABRICKS_HOST}/api/2.0/genie/spaces/{GENIE_SPACE_ID}/start-conversation
+- Auth: Bearer token from environment variable DATABRICKS_TOKEN
+- Pass the user message as the query, prepend the active context (reason + driver filters) to the message for grounding
+- Parse the response and append an AI message bubble
+- Handle errors gracefully with a dbc.Alert danger bubble
+
+---
+
+## STYLING
+
+Create an external stylesheet or inline styles using these rules:
+- Font: system-ui, sans-serif
+- Background: #F8F8F6 (page), #FFFFFF (cards)
+- All cards: border: 1px solid rgba(0,0,0,0.08), border-radius: 8px
+- Active reason card: border-left: 3px solid #7F77DD
+- KPI values: font-size: 22px, font-weight: 500
+- Sidebar filter pills: small rounded buttons, toggle on/off with n_clicks, use dbc.Button with outline style
+- Table: no cell borders, alternating row background, sticky header
+- Navbar: white background, bottom border 1px solid rgba(0,0,0,0.08), no box-shadow
+- Chat bubbles: border-radius: 10px, max-width: 90%, padding: 8px 12px
+
+---
+
+## FILE STRUCTURE
+
+Organise the code into:
+- app.py — Dash app init, layout, run server
+- callbacks/investigation.py — all callbacks for this page
+- callbacks/genie.py — Genie Space API call logic
+- components/sidebar.py — sidebar filter component
+- components/reason_cards.py — the 4 reason breakdown cards
+- components/driver_table.py — the DataTable component
+- components/chat.py — the Genie chat panel
+- assets/custom.css — all custom CSS overrides
+
+Use environment variables for all Databricks credentials. Never hardcode tokens.
+
