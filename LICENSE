@@ -20,211 +20,293 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-
-I'm building a Dash (Plotly) app deployed on Databricks Apps, styled with Dash Bootstrap Components (dbc). The app connects to a Databricks Genie Space for natural language querying of policy data.
-
-I need you to build a full-page investigation dashboard UI for actuaries to diagnose why scoring model drivers are unscored. Here is the complete spec:
+# PolicyIQ — Copilot build prompts
+# Run these one at a time. Validate each step before moving to the next.
 
 ---
 
-## LAYOUT
+## Step 1 — Navbar
 
-Use dbc.Container(fluid=True) with a fixed-height viewport. The layout has 3 columns:
-- Left sidebar: 2 cols wide (filters)
-- Center panel: 7 cols wide (KPIs + reason cards + driver table)
-- Right panel: 3 cols wide (Genie chat)
+```
+In my existing Dash app using dbc, build a top navbar using dbc.Navbar.
+Match exactly the colors, font sizes and spacing already used in my app.
 
-Use a top navbar built with dbc.Navbar containing:
-- Brand name "PolicyIQ" with a teal dot (●) prefix
+It should contain:
+- Brand name "PolicyIQ" with a small circle prefix using a span with inline style:
+  width 8px, height 8px, border-radius 50%, display inline-block, margin-right 6px
+  Use the primary accent color already defined in my app for the dot color
 - Nav tabs: Overview | Driver investigation (active) | Portfolio | Mortality
-- Right-aligned status badge: green dot + "Genie · Databricks"
+  built with dbc.Nav and dbc.NavItem, using the existing nav styling in my app
+- Right-aligned status indicator: small dot + text "Genie · Databricks"
+  Use the existing success/positive color from my app for both dot and text
+
+Do not introduce any new colors or font sizes. Reuse what already exists in my app.
+```
 
 ---
 
-## LEFT SIDEBAR
+## Step 2 — KPI row
 
-Wrap in a dbc.Card with no border-radius on the right side, full height, light background.
+```
+In my existing Dash app using dbc, create a kpi_row component in components/kpi_row.py.
 
-Include these filter sections, each with a small uppercase label:
+It returns a dbc.Row with 4 equal dbc.Col, each containing a dbc.Card with:
+- A muted label (reuse the muted text style already in my app)
+- A large value (reuse the largest text/heading style already in my app)
+- A small delta subtitle line
 
-1. Text search input (dbc.Input) — placeholder: "e.g. POL-00291, age_band…"
+The 4 cards are:
+1. Label "Total drivers",      value "24",     subtitle "in scoring model"
+2. Label "Unscored drivers",   value "7",      subtitle "29% of model"      — use danger color
+3. Label "Policies affected",  value "41.3K",  subtitle "4.9% of portfolio" — use danger color
+4. Label "Est. score impact",  value "–8.2%",  subtitle "avg score degradation" — use warning color
 
-2. Source table — dbc.Checklist as pills:
-   options: ["Policy table", "Client table", "Both / join issue"]
-   all checked by default
-
-3. Unscored reason category — dbc.Checklist as pills:
-   options: ["Missing value", "Out of range", "Mapping error", "Join failure", "Inactive policy", "Future effective"]
-   first 4 checked by default
-
-4. Driver / feature — dbc.Checklist as pills:
-   options: ["age_band", "smoker_status", "gender", "face_amount", "duration", "underwriting_class", "province", "product_code"]
-   first 3 checked by default
-
-5. Severity — dbc.Checklist as pills:
-   options: ["High", "Med", "Low"]
-   style each pill with its semantic color (High=red, Med=amber, Low=green)
-
-At the bottom: snapshot label showing "2024-Q4 · 1.2M policies" and "Last refresh: 2h ago"
+Do not hardcode any hex colors. Use dbc semantic colors (color="danger", color="warning")
+and the existing card style already defined in my app for all card styling.
+Do not add any data fetching or callbacks yet. This is layout only.
+```
 
 ---
 
-## CENTER PANEL — TOP: KPI ROW
+## Step 3 — Reason breakdown cards
 
-4 dbc.Card metric cards in a dbc.Row, each showing:
-1. "Total drivers" → 24, subtitle "in scoring model"
-2. "Unscored drivers" → 7 (red), subtitle "29% of model"
-3. "Policies affected" → 41.3K, subtitle "4.9% of portfolio"
-4. "Est. score impact" → –8.2% (amber), subtitle "avg score degradation"
+```
+In my existing Dash app using dbc, create a reason_cards component
+in components/reason_cards.py.
 
----
+It returns a dbc.Row with 2 dbc.Col each containing 2 stacked dbc.Card components (4 total).
+Each card has n_clicks=0 and style cursor pointer.
+Match the card style (border, radius, padding, background) already used in my app.
 
-## CENTER PANEL — MIDDLE: REASON BREAKDOWN CARDS
+Each card contains:
+- A header row: reason title on the left + source badge pill on the right
+- A large count number
+- A subtitle in muted text
+- A small dcc.Graph sparkline (height 50px, no axes, no margins, no legend,
+  transparent background) — bar chart with 8 bars of placeholder data [1,2,3,4,5,4,3,2]
 
-A 2x2 grid of dbc.Card components (dbc.Row with 2 dbc.Col each).
-Each card is clickable and updates a dcc.Store called "active-reason-store".
-The active card gets a colored left border accent (2px).
+The 4 cards:
+1. id="card-missing",  title="Missing value",  badge="Policy + Client",
+   count=18240, subtitle="drivers with null / blank fields"
+2. id="card-oor",      title="Out of range",   badge="Policy table",
+   count=10482, subtitle="values outside model bounds"
+3. id="card-join",     title="Join failure",   badge="Policy + Client",
+   count=7901,  subtitle="client_id not matched to policy"
+4. id="card-mapping",  title="Mapping error",  badge="Client table",
+   count=4620,  subtitle="unrecognised category codes"
 
-Card 1 — Missing value
-- Source badge: "Policy + Client" (amber pill)
-- Count: 18,240
-- Subtitle: "drivers with null / blank fields"
-- A small plotly bar chart (go.Bar) showing weekly trend, purple bars
-- id: "card-missing"
+For badge colors and sparkline bar colors, reuse the existing semantic and
+categorical colors already defined in my app. Do not hardcode hex values.
 
-Card 2 — Out of range
-- Source badge: "Policy table" (purple pill)
-- Count: 10,482
-- Subtitle: "values outside model bounds"
-- Small bar chart, coral/red bars
-- id: "card-oor"
-
-Card 3 — Join failure
-- Source badge: "Policy + Client" (amber pill)
-- Count: 7,901
-- Subtitle: "client_id not matched to policy"
-- Small bar chart, teal bars
-- id: "card-join"
-
-Card 4 — Mapping error
-- Source badge: "Client table" (teal pill)
-- Count: 4,620
-- Subtitle: "unrecognised category codes"
-- Small bar chart, amber bars
-- id: "card-mapping"
-
-Each card has an n_clicks property. Wire a callback that:
-- Sets the active-reason-store value to the clicked reason name
-- Adds a CSS class "active-card" to the clicked card (left border accent)
-- Updates the Genie chat context banner with the selected reason
+Add a CSS class "active-card" in assets/custom.css for the active selected card —
+use a left border accent using the primary color already in my app.
+Do not add callbacks yet. Layout only.
+```
 
 ---
 
-## CENTER PANEL — BOTTOM: DRIVER DETAIL TABLE
+## Step 4 — Driver detail table
 
-Use dash_table.DataTable with id="driver-table".
+```
+In my existing Dash app using dbc, create a driver_table component
+in components/driver_table.py.
 
-Columns:
-- Driver (string)
-- Source (string) — render as colored pill using style_data_conditional
-- Reason (string) — colored pill
-- Severity (string) — colored pill
-- Affected (integer, formatted with comma separator)
-- Coverage % (float, show as a progress bar using style_data_conditional background trick)
+It returns a dash_table.DataTable with id="driver-table".
+Do not add any default data. The data will be injected by a callback later.
+Pass data=[] and columns only.
 
-Data (hardcode as default, will be replaced by Genie callback):
-[
-  {"driver": "smoker_status", "source": "Client", "reason": "Missing", "severity": "High", "affected": 12401, "coverage": 30},
-  {"driver": "age_band", "source": "Policy", "reason": "Out of range", "severity": "High", "affected": 9820, "coverage": 24},
-  {"driver": "client_id (join)", "source": "Both", "reason": "Join failure", "severity": "Med", "affected": 7901, "coverage": 19},
-  {"driver": "underwriting_class", "source": "Client", "reason": "Mapping error", "severity": "Med", "affected": 4620, "coverage": 11},
-  {"driver": "gender", "source": "Client", "reason": "Missing", "severity": "Low", "affected": 3210, "coverage": 8},
-  {"driver": "face_amount", "source": "Policy", "reason": "Out of range", "severity": "Med", "affected": 2840, "coverage": 7},
-  {"driver": "province", "source": "Policy", "reason": "Mapping error", "severity": "Low", "affected": 510, "coverage": 1}
-]
+Columns: Driver, Source, Reason, Severity, Affected (integer), Coverage (float)
 
-Style rules via style_data_conditional:
-- Source "Client" → purple pill background #EEEDFE, text #3C3489
-- Source "Policy" → teal pill background #E1F5EE, text #085041
-- Source "Both" → amber pill background #FAEEDA, text #633806
-- Severity "High" → red text #A32D2D
-- Severity "Med" → amber text #854F0B
-- Severity "Low" → green text #3B6D11
-- Coverage column: use linear-gradient background trick to simulate a progress bar
+style_data_conditional rules — use the closest colors already present in my app:
+- Source "Client" → light purple background, dark purple text
+- Source "Policy" → light teal background, dark teal text
+- Source "Both"   → light amber background, dark amber text
+- Severity "High" → danger color text, font-weight 500
+- Severity "Med"  → warning color text, font-weight 500
+- Severity "Low"  → success color text, font-weight 500
+- Coverage column: linear-gradient background to simulate a progress bar
+  using the primary accent color already in my app
 
-Sort by "affected" descending by default. Enable sort_action="native".
-
-Wire a callback: when active-reason-store changes OR sidebar filters change, filter the table rows accordingly.
+Table style: no cell borders, sticky header, alternating row background
+matching the secondary background already used in my app.
+Enable sort_action="native". Do not add callbacks yet.
+```
 
 ---
 
-## RIGHT PANEL — GENIE CHAT
+## Step 5 — Dynamic filter bar
 
-Build a chat interface in a full-height dbc.Card. Structure:
+```
+In my existing Dash app using dbc, create a filter_bar component
+in components/filter_bar.py.
 
-1. Card header: "Investigate with Genie" title + "SQL · Genie" purple pill badge
+This is a horizontal bar that sits between the KPI row and the reason cards.
+Users build their own filters — there are no predefined filter values.
 
-2. Context banner (dbc.Alert, id="context-banner", color="primary", light=True):
-   Shows "Active context: [reason] · [driver] · [N] records"
-   Updates via callback when active-reason-store changes
+It contains in a single flex row:
+- dbc.Select(id="filter-column-select", placeholder="Choose a column…")
+  Options: Driver, Source, Reason, Severity, Affected, Coverage
+- dbc.Input(id="filter-value-input", placeholder="Filter value…", type="text")
+- dbc.Button("+ Add filter", id="add-filter-btn", size="sm", outline=True)
+- dbc.Button("Clear all",    id="clear-filters-btn", size="sm", outline=True, color="danger")
+- A div(id="active-filters-display") showing active filters as removable pills
+  Each pill: "Column = Value" + an × button
+  Each × button has id={"type": "remove-filter", "index": i}
 
-3. Chat message area: a scrollable div (id="chat-messages") containing dbc.Card bubbles.
-   User messages: right-aligned, light gray background
-   AI messages: left-aligned, light teal background #E1F5EE, teal border
+Store filters in dcc.Store(id="filters-store", data=[]).
 
-4. Suggested prompts — 3 dbc.Button components (outline, small, full width):
-   - "Fix rate if we backfill smoker_status ↗"
-   - "Broker channels with most missing drivers ↗"
-   - "Score uplift if all drivers fixed ↗"
-   Clicking a suggested prompt populates the input and triggers send.
-
-5. Input row: dbc.Input (id="chat-input", placeholder="Dig deeper into any driver or cohort…") + dbc.Button("Send", id="send-btn")
-
----
-
-## GENIE SPACE CALLBACK
-
-Create a callback with:
-- Input: send-btn n_clicks, chat-input value, active-reason-store data
-- State: chat-messages children (for conversation history)
-- Output: chat-messages children (append new bubbles), chat-input value (clear after send)
-
-Inside the callback, call the Databricks Genie Space API:
-- Use the existing DATABRICKS_HOST and GENIE_SPACE_ID environment variables
-- Endpoint: POST {DATABRICKS_HOST}/api/2.0/genie/spaces/{GENIE_SPACE_ID}/start-conversation
-- Auth: Bearer token from environment variable DATABRICKS_TOKEN
-- Pass the user message as the query, prepend the active context (reason + driver filters) to the message for grounding
-- Parse the response and append an AI message bubble
-- Handle errors gracefully with a dbc.Alert danger bubble
+Match the card style, button style, input style, and spacing already in my app.
+Do not introduce new colors or sizes. Do not add callbacks yet. Layout only.
+```
 
 ---
 
-## STYLING
+## Step 6 — Wire filters to driver table
 
-Create an external stylesheet or inline styles using these rules:
-- Font: system-ui, sans-serif
-- Background: #F8F8F6 (page), #FFFFFF (cards)
-- All cards: border: 1px solid rgba(0,0,0,0.08), border-radius: 8px
-- Active reason card: border-left: 3px solid #7F77DD
-- KPI values: font-size: 22px, font-weight: 500
-- Sidebar filter pills: small rounded buttons, toggle on/off with n_clicks, use dbc.Button with outline style
-- Table: no cell borders, alternating row background, sticky header
-- Navbar: white background, bottom border 1px solid rgba(0,0,0,0.08), no box-shadow
-- Chat bubbles: border-radius: 10px, max-width: 90%, padding: 8px 12px
+```
+In callbacks/investigation.py in my existing Dash app, add the filter callbacks.
+The full dataset comes from the real data source already wired in my app —
+do not define any default data here.
+
+Callback 1 — Add a filter:
+  Input:  add-filter-btn n_clicks
+  State:  filter-column-select value, filter-value-input value, filters-store data
+  Output: filters-store data, active-filters-display children,
+          filter-value-input value (clear to "")
+  Logic:
+  - Append {"column": selected_column, "value": entered_value} to filters list
+  - Rebuild pills display from updated list
+  - Each pill uses id={"type": "remove-filter", "index": i}
+
+Callback 2 — Remove a filter (pattern-matching):
+  Input:  {"type": "remove-filter", "index": ALL} n_clicks
+  State:  filters-store data
+  Output: filters-store data, active-filters-display children
+  Logic:  remove filter at clicked index, rebuild pills
+
+Callback 3 — Clear all filters:
+  Input:  clear-filters-btn n_clicks
+  Output: filters-store data (reset to []), active-filters-display children (empty)
+
+Callback 4 — Filter the driver table:
+  Input:  filters-store data
+  Output: driver-table data
+  Logic:
+  - Start from the full dataset already available in my app
+  - For each active filter apply: str(row[column]).lower() contains str(value).lower()
+  - Filters are cumulative AND logic
+  - Return filtered list of dicts
+```
 
 ---
 
-## FILE STRUCTURE
+## Step 7 — Genie chat panel
 
-Organise the code into:
-- app.py — Dash app init, layout, run server
-- callbacks/investigation.py — all callbacks for this page
-- callbacks/genie.py — Genie Space API call logic
-- components/sidebar.py — sidebar filter component
-- components/reason_cards.py — the 4 reason breakdown cards
-- components/driver_table.py — the DataTable component
-- components/chat.py — the Genie chat panel
-- assets/custom.css — all custom CSS overrides
+```
+In my existing Dash app using dbc, create a chat component in components/chat.py.
 
-Use environment variables for all Databricks credentials. Never hardcode tokens.
+It returns a full-height dbc.Card matching the card style already in my app.
+Structure:
 
+1. dbc.CardHeader:
+   - Left:  title "Investigate with Genie" — reuse existing heading style
+   - Right: badge pill "SQL · Genie" — reuse the existing badge/pill style in my app
+
+2. dbc.Alert(id="context-banner"):
+   Default text: "Select a reason card above to focus the investigation"
+   Use the info semantic color already in my app. dismissable=False.
+
+3. Scrollable message area:
+   div(id="chat-messages", style overflow-y auto, flex 1, padding matching my app)
+   Seed with one AI message bubble:
+   "I am connected to your Databricks policy warehouse.
+    Click a reason card or ask me anything about unscored drivers."
+
+   Bubble styles — reuse existing card/surface colors in my app:
+   - User bubble: right-aligned, secondary background color
+   - AI bubble:   left-aligned, success-light background, success-light border
+
+4. Suggested prompts — 3 full-width outline dbc.Button (size sm), reuse button style:
+   id="sug-1": "Fix rate if we backfill smoker_status ↗"
+   id="sug-2": "Broker channels with most missing drivers ↗"
+   id="sug-3": "Score uplift if all drivers fixed ↗"
+
+5. dbc.InputGroup at bottom:
+   dbc.Input(id="chat-input", placeholder="Dig deeper into any driver or cohort…")
+   dbc.Button("Send", id="send-btn") — reuse primary button style
+
+Do not add callbacks yet. Layout only.
+```
+
+---
+
+## Step 8 — Genie API callback
+
+```
+In callbacks/genie.py in my existing Dash app, implement the Genie Space API callback.
+
+Read credentials from environment variables already used in my app:
+  DATABRICKS_HOST, DATABRICKS_TOKEN, GENIE_SPACE_ID
+
+Helper function call_genie(user_message: str, context: str) -> str:
+  1. POST {DATABRICKS_HOST}/api/2.0/genie/spaces/{GENIE_SPACE_ID}/start-conversation
+     Headers: Authorization Bearer, Content-Type application/json
+     Body: {"content": f"Context: {context}\n\nQuestion: {user_message}"}
+     Extract conversation_id and message_id from response
+
+  2. Poll up to 15 times with 2s sleep:
+     GET …/conversations/{conversation_id}/messages/{message_id}
+     When status == "COMPLETED" return attachments[0]["text"]["content"]
+
+  3. On any error return: "I could not retrieve an answer. Please try again."
+
+Dash callback:
+  Input:  send-btn n_clicks, sug-1/2/3 n_clicks
+  State:  chat-input value, chat-messages children,
+          context-banner children, filters-store data, active-reason-store data
+  Output: chat-messages children, chat-input value (clear to "")
+
+  Logic:
+  - Use dash.callback_context to identify the trigger
+  - If suggestion triggered, use its label (strip ↗) as the message
+  - If send-btn triggered, use chat-input value
+  - Build context string from: active reason (active-reason-store)
+    + active filters (filters-store)
+  - Append user bubble, call call_genie(), append AI bubble
+  - Return updated messages + clear input
+```
+
+---
+
+## Step 9 — Assemble in app.py
+
+```
+In my existing app.py, assemble the full layout using all components just built.
+Do not change any existing imports, app init, or server config — only add to the layout.
+
+Import:
+  from components.kpi_row import kpi_row
+  from components.reason_cards import reason_cards
+  from components.filter_bar import filter_bar
+  from components.driver_table import driver_table
+  from components.chat import chat_panel
+  import callbacks.investigation
+  import callbacks.genie
+
+Replace the existing layout with dbc.Container(fluid=True):
+
+  Row 1: navbar — full width
+  Row 2: no-gutter dbc.Row full height:
+    dbc.Col(width=9) stacked vertically with no added styling:
+      kpi_row()
+      filter_bar()
+      reason_cards()
+      driver_table()
+    dbc.Col(width=3): chat_panel() full height
+
+Add at the layout root (not inside any column):
+  dcc.Store(id="active-reason-store", data=None)
+  dcc.Store(id="filters-store", data=[])
+
+Do not change the server run config. Databricks Apps handles the port.
+```
